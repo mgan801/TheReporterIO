@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Local Reporter Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f7f9fc;
+      margin: 0;
+      padding: 0;
+    }
+
+    header {
+      background: #2d6cdf;
+      color: white;
+      padding: 20px;
+      text-align: center;
+      font-size: 24px;
+      font-weight: bold;
+    }
+
+    .container {
+      width: 90%;
+      max-width: 900px;
+      margin: 30px auto;
+      background: white;
+      padding: 25px;
+      border-radius: 10px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    .section-title {
+      font-size: 20px;
+      margin-bottom: 10px;
+      font-weight: bold;
+      color: #333;
+    }
+
+    #fileInput {
+      margin-bottom: 10px;
+    }
+
+    button {
+      background: #2d6cdf;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 10px;
+      font-size: 14px;
+    }
+
+    button:hover {
+      background: #1f4fb3;
+    }
+
+    #output {
+      background: #f4f4f4;
+      padding: 15px;
+      border-radius: 5px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      font-size: 14px;
+    }
+
+    /* Enhanced KPI Cards */
+    .kpi-container {
+      display: flex;
+      gap: 20px;
+      margin-top: 25px;
+    }
+
+    .kpi-card {
+      flex: 1;
+      background: #ffffff;
+      padding: 20px;
+      border-radius: 12px;
+      text-align: center;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+      border: 1px solid #e5e9f2;
+    }
+
+    .kpi-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #2d6cdf;
+      margin-bottom: 5px;
+    }
+
+    .kpi-label {
+      font-size: 14px;
+      color: #666;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    canvas {
+      margin-top: 30px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>Local Reporter Dashboard</header>
+
+<div class="container">
+
+  <div class="section-title">Upload Your File</div>
+  <input type="file" id="fileInput">
+  <button id="uploadBtn">Upload</button>
+  <button id="transformBtn">Transform Data</button>
+
+  <div id="output"></div>
+
+  <div class="section-title">Key Performance Indicators</div>
+
+  <div class="kpi-container">
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiTotalSales">-</div>
+      <div class="kpi-label">Total Sales</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiAvgSales">-</div>
+      <div class="kpi-label">Average Sales</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpiRowCount">-</div>
+      <div class="kpi-label">Row Count</div>
+    </div>
+  </div>
+
+  <div class="section-title">Sales Over Time</div>
+  <canvas id="salesChart" width="600" height="300"></canvas>
+
+</div>
+
+<script>
+let chartInstance = null;
+
+document.getElementById("uploadBtn").onclick = async () => {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return alert("Pick a file first");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("http://127.0.0.1:8000/upload", {
+    method: "POST",
+    body: formData
+  });
+
+  const data = await res.json();
+  document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+
+  // Update KPI cards
+  document.getElementById("kpiTotalSales").innerText = data.kpis.total_sales.toFixed(2);
+  document.getElementById("kpiAvgSales").innerText = data.kpis.avg_sales.toFixed(2);
+  document.getElementById("kpiRowCount").innerText = data.kpis.row_count;
+
+  // Get transformed rows for charts
+  const res2 = await fetch("http://127.0.0.1:8000/transform", {
+    method: "POST",
+    body: formData
+  });
+  const transformed = await res2.json();
+
+  const labels = [];
+  const sales = [];
+
+  transformed.rows.forEach(row => {
+    labels.push(row.Date);
+    sales.push(row.Sales);
+  });
+
+  // Destroy previous chart if exists
+  if (chartInstance) chartInstance.destroy();
+
+  // Draw chart
+  chartInstance = new Chart(document.getElementById("salesChart"), {
+    type: "line",
+    data: {
+      labels: labels,
+      datasets: [{
+        label: "Sales Over Time",
+        data: sales,
+        borderColor: "#2d6cdf",
+        borderWidth: 3,
+        fill: false,
+        tension: 0.2
+      }]
+    }
+  });
+};
+
+document.getElementById("transformBtn").onclick = async () => {
+  const file = document.getElementById("fileInput").files[0];
+  if (!file) return alert("Pick a file first");
+
+  const formData = new FormData();
+  formData.append("file", file);
+
+  const res = await fetch("http://127.0.0.1:8000/transform", {
+    method: "POST",
+    body: formData
+  });
+
+  const data = await res.json();
+  document.getElementById("output").innerText = JSON.stringify(data, null, 2);
+};
+</script>
+
+</body>
+</html>
