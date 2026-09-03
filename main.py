@@ -1,12 +1,11 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
 import pandas as pd
-from io import BytesIO
 
 app = FastAPI()
 
-# Allow dashboard to call API
+# Allow your dashboard JS to call the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,25 +13,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def compute_basic_kpis(df):
-    kpis = {}
-    if "Sales" in df.columns:
-        kpis["total_sales"] = float(df["Sales"].sum())
-        kpis["avg_sales"] = float(df["Sales"].mean())
-    kpis["row_count"] = len(df)
-    return kpis
-
+# -----------------------------
+# Serve the dashboard
+# -----------------------------
 @app.get("/dashboard")
-def get_dashboard():
-    with open("dashboard.html", "r") as f:
-        html = f.read()
-    return HTMLResponse(content=html)
+def dashboard():
+    try:
+        with open("dashboard.html", "r", encoding="utf-8") as f:
+            return HTMLResponse(f.read())
+    except Exception as e:
+        return HTMLResponse(f"Error loading dashboard: {e}", status_code=500)
 
+# -----------------------------
+# Upload endpoint
+# -----------------------------
 @app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
-    content = await file.read()
-    df = pd.read_csv(BytesIO(content))
-    kpis = compute_basic_kpis(df)
+    df = pd.read_csv(file.file)
+
+    # Basic KPIs
+    total_sales = df["Sales"].sum()
+    avg_sales = df["Sales"].mean()
+    row_count = len(df)
+
+    kpis = {
+        "total_sales": float(total_sales),
+        "avg_sales": float(avg_sales),
+        "row_count": int(row_count)
+    }
 
     return {
         "filename": file.filename,
@@ -40,14 +48,23 @@ async def upload_file(file: UploadFile = File(...)):
         "kpis": kpis
     }
 
+# -----------------------------
+# Transform endpoint
+# -----------------------------
 @app.post("/transform")
 async def transform_file(file: UploadFile = File(...)):
-    content = await file.read()
-    df = pd.read_csv(BytesIO(content))
+    df = pd.read_csv(file.file)
 
-    df["Sales_x2"] = df["Sales"] * 2
+    # Example transformation: return rows as JSON
+    rows = df.to_dict(orient="records")
 
-    return {
-        "columns": df.columns.tolist(),
-        "rows": df.to_dict(orient="records")
-    }
+    return {"rows": rows}
+
+# -----------------------------
+# Root redirect
+# -----------------------------
+@app.get("/")
+def root():
+    return HTMLResponse(
+        "<h2>theReporter.io API is running</h2><p>Visit /dashboard</p>"
+    )
